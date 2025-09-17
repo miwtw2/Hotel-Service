@@ -1,10 +1,15 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
-from app.services.db_service import log_message
+from app.services.db_services import log_message
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    # Allow startup but reply with a clear error message when called
+    client = None
+else:
+    client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Hotel info for quick replies
 hotel_info = {
@@ -56,18 +61,33 @@ def get_ai_response(user_text: str, room_number: str = "Unknown") -> str:
         log_message(room_number, reply, "ai")
         return reply
 
-    # AI fallback using GPT-3.5
-    completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text}
-        ]
-    )
-    ai_reply = completion.choices[0].message.content.strip()
+    # AI fallback using GPT-3.5 (or any configured model)
+    if client is None:
+        ai_reply = (
+            "AI is not configured (missing OPENAI_API_KEY). "
+            "Please set the backend .env and restart the server."
+        )
+    else:
+        try:
+            completion = client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_text}
+                ]
+            )
+            ai_reply = (completion.choices[0].message.content or "").strip()
+            if not ai_reply:
+                ai_reply = "I'm sorry, I couldn't generate a response just now. Please try again."
+        except Exception as e:
+            ai_reply = f"AI error: {e}"
     
     # Log guest message and AI reply
-    log_message(room_number, user_text, "guest")
-    log_message(room_number, ai_reply, "ai")
+    try:
+        log_message(room_number, user_text, "guest")
+        log_message(room_number, ai_reply, "ai")
+    except Exception:
+        # Don't break reply if logging fails
+        pass
     
     return ai_reply

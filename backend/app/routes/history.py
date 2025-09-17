@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from app.services.db_service import get_messages
+from app.services.db_services import get_messages
 
 router = APIRouter()
 

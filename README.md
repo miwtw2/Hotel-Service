@@ -20,13 +20,12 @@ A modern hospitality service platform built with TypeScript, React, and FastAPI,
 - TypeScript
 - Tailwind CSS
 - Vite
-- Supabase Client
 
 ### Backend
 - FastAPI
 - Python 3.10+
 - AI Services Integration
-- Supabase Database
+- Supabase Database (optional)
 
 ## Project Structure
 ```
@@ -40,10 +39,8 @@ Hotel-Service/
 │   └── .env              # Environment configuration
 ├── src/                   # Frontend source code
 │   ├── App.tsx           # Main React component
-│   ├── index.tsx         # Entry point
-│   ├── api/              # API clients
+│   ├── main.tsx          # Entry point
 │   └── components/       # React components
-├── public/               # Static assets
 ├── package.json         # Node.js dependencies
 ├── requirements.txt     # Python dependencies
 └── tailwind.config.js   # Tailwind configuration
@@ -74,44 +71,38 @@ Hotel-Service/
    ```
 
 3. **Configure environment variables**
-   
-   Create `backend/app/.env` with:
+
+   Backend: create `backend/.env` with:
    ```env
-   DATABASE_URL=your-supabase-url
-   SUPABASE_KEY=your-supabase-key
-   AI_API_KEY=your-ai-service-key
+   OPENAI_API_KEY=your-openai-key
+   SUPABASE_URL=your-supabase-url # optional
+   SUPABASE_KEY=your-supabase-key # optional
+   ```
+
+   Frontend (optional): create `.env` in project root if backend isn't on default URL
+   ```env
+   VITE_API_URL=http://localhost:8000
    ```
 
 ### Running the Application
 
-1. **Start the frontend**
+1. **Start the backend**
+   ```bash
+   cd backend
+   uvicorn app.main:app --reload --port 8000
+   ```
+   API available at http://localhost:8000
+
+2. **Start the frontend**
    ```bash
    npm run dev
    ```
    Access at http://localhost:5173
 
-2. **Start the backend**
-   ```bash
-   cd backend
-   python -m app.main
-   ```
-   API available at http://localhost:8000
-
 ## API Endpoints
 
 ### Chat
-- `POST /chat/message` - Send a message to AI service
-- `GET /chat/history` - Get chat history
-
-### Requests
-- `GET /requests` - List service requests
-- `POST /requests` - Create new request
-- `PUT /requests/{id}` - Update request status
-
-## Components
-
-- `ChatWindow.tsx` - Main chat interface
-- `Message.tsx` - Individual message component
+- `POST /chat` - Send a message to AI service
 
 ## Services
 

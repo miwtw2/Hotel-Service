@@ -1,19 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader } from 'lucide-react';
-import type { ChatMessage, ServiceRequest, Guest } from '../App';
+import type { ChatMessage } from '../App';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (content: string, type: 'user' | 'bot') => void;
   onCreateRequest: (type: string, description: string, priority?: 'normal' | 'urgent' | 'emergency') => void;
-  guest: Guest;
+  sessionToken: string;
 }
+
+const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:8000';
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   messages,
   onSendMessage,
   onCreateRequest,
-  guest
+  sessionToken
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -27,31 +29,33 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const generateBotResponse = (userMessage: string): string => {
-    const message = userMessage.toLowerCase();
-    
-    if (message.includes('towel')) {
-      return "I'll arrange for fresh towels to be delivered to your room right away. You can expect them within 15-20 minutes. Is there anything else you need?";
-    } else if (message.includes('blanket') || message.includes('pillow')) {
-      return "I'll send extra bedding to room " + guest.roomNumber + " immediately. Our housekeeping team will deliver them within 15 minutes. What else can I help you with?";
-    } else if (message.includes('room service') || message.includes('food') || message.includes('order')) {
-      return "I'd be happy to help with room service! Our kitchen is open 24/7. Would you like me to connect you with our dining menu, or do you have a specific request in mind?";
-    } else if (message.includes('clean') || message.includes('housekeeping')) {
-      return "I'll schedule housekeeping for your room. Would you prefer immediate service or would you like to schedule it for a specific time? Our team can be there within 30 minutes if you need immediate assistance.";
-    } else if (message.includes('maintenance') || message.includes('repair') || message.includes('broken')) {
-      return "I'll dispatch our maintenance team to room " + guest.roomNumber + " right away. They'll assess and resolve the issue as quickly as possible. Can you provide more details about what needs attention?";
-    } else if (message.includes('checkout') || message.includes('bill') || message.includes('receipt')) {
-      return "I can help you with checkout information. Would you like me to prepare your bill, arrange express checkout, or answer any questions about charges?";
-    } else if (message.includes('wifi') || message.includes('internet')) {
-      return "For WiFi assistance: Network is 'HotelGuest', password is 'Welcome2024'. If you're still having connectivity issues, I can send our IT support to your room.";
-    } else if (message.includes('taxi') || message.includes('transport') || message.includes('airport')) {
-      return "I'll be happy to arrange transportation for you. Where would you like to go and when? I can book a taxi, rideshare, or airport shuttle depending on your preference.";
-    } else {
-      return "I understand you need assistance. Let me help you with that. Could you provide a bit more detail about what you need? I'm here to ensure your stay is comfortable and enjoyable.";
-    }
-  };
+  const generateBotResponse = async (userMessage: string): Promise<string> => {
+    try {
+      const response = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          text: userMessage,
+        }),
+      });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Session expired. Please login again.');
+        }
+        throw new Error('Failed to get response from AI');
+      }
+
+      const data = await response.json();
+      return data.reply;
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      return error instanceof Error ? error.message : "I apologize, but I'm having trouble connecting to the server. Please try again in a moment.";
+    }
+  };  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
@@ -62,26 +66,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     // Show typing indicator
     setIsTyping(true);
 
-    // Simulate AI thinking time
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Generate and send bot response
+      const botResponse = await generateBotResponse(userMessage);
+      onSendMessage(botResponse, 'bot');
 
-    // Generate and send bot response
-    const botResponse = generateBotResponse(userMessage);
-    onSendMessage(botResponse, 'bot');
-
-    // Create a service request if the message indicates a specific need
-    const message = userMessage.toLowerCase();
-    if (message.includes('towel')) {
-      onCreateRequest('Towels', 'Fresh towels requested', 'normal');
-    } else if (message.includes('blanket') || message.includes('pillow')) {
-      onCreateRequest('Bedding', 'Extra bedding requested', 'normal');
-    } else if (message.includes('clean') || message.includes('housekeeping')) {
-      onCreateRequest('Housekeeping', 'Room cleaning requested', 'normal');
-    } else if (message.includes('maintenance') || message.includes('repair') || message.includes('broken')) {
-      onCreateRequest('Maintenance', 'Maintenance assistance requested', 'urgent');
+      // Create service requests based on the AI's response
+      const messageLower = botResponse.toLowerCase();
+      if (messageLower.includes('housekeeping') || messageLower.includes('cleaning')) {
+        onCreateRequest('Housekeeping', 'Room service requested', 'normal');
+      } else if (messageLower.includes('maintenance') || messageLower.includes('repair')) {
+        onCreateRequest('Maintenance', 'Maintenance requested', 'urgent');
+      }
+    } catch (error) {
+      console.error('Error in chat:', error);
+      onSendMessage('I apologize, but I encountered an error. Please try again.', 'bot');
+    } finally {
+      setIsTyping(false);
     }
-
-    setIsTyping(false);
   };
 
   return (

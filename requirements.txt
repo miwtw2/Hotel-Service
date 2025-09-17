@@ -1,7 +1,6 @@
-fastapi==0.111.1
-uvicorn[standard]==0.23.1
-python-dotenv==1.0.1
-openai==1.32.2
-requests==2.31.0
-supabase==2.7.1          # if you use Supabase for DB
-pocketbase==0.0.1        # optional, only if using PocketBase SDK
+fastapi>=0.111.1
+uvicorn[standard]>=0.23.1
+python-dotenv>=1.0.1
+openai>=1.0.0
+requests>=2.31.0
+supabase>=2.7.1

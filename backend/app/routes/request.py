@@ -1,7 +1,7 @@
 # app/routes/requests.py
 from fastapi import APIRouter
 from pydantic import BaseModel
-from app.services.db_service import handle_quick_request
+from app.services.db_services import handle_quick_request
 
 router = APIRouter()
 
