@@ -1,8 +1,8 @@
 // src/api/supabaseClient.ts
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL!;
-const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_KEY!;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL!;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY!;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -28,7 +28,7 @@ export const getChatHistory = async (roomNumber: string) => {
 
 // Send guest message
 export const sendMessage = async (text: string, roomNumber: string) => {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("chat_messages")
     .insert([{ room_number: roomNumber, message: text, sender: "guest" }])
     .select();
@@ -51,7 +51,7 @@ export const sendMessage = async (text: string, roomNumber: string) => {
 
 // Send quick request
 export const sendRequest = async (request: string, roomNumber: string) => {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("chat_messages")
     .insert([{ room_number: roomNumber, message: request, sender: "guest" }])
     .select();
