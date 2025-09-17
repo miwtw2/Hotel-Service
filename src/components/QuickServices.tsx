@@ -1,0 +1,136 @@
+import React from 'react';
+import { 
+  Utensils, 
+  Bed, 
+  Car, 
+  MapPin, 
+  Wrench, 
+  Sparkles,
+  Coffee,
+  Wifi,
+  Phone
+} from 'lucide-react';
+
+interface QuickServicesProps {
+  onServiceRequest: (service: { name: string; description: string }) => void;
+}
+
+const services = [
+  {
+    icon: Utensils,
+    name: 'Room Service',
+    description: 'Order food and beverages to your room',
+    color: 'bg-blue-50 hover:bg-blue-100 border-blue-200'
+  },
+  {
+    icon: Bed,
+    name: 'Housekeeping',
+    description: 'Request towels, bedding, or room cleaning',
+    color: 'bg-green-50 hover:bg-green-100 border-green-200'
+  },
+  {
+    icon: Car,
+    name: 'Transportation',
+    description: 'Book taxi, shuttle, or car rental services',
+    color: 'bg-purple-50 hover:bg-purple-100 border-purple-200'
+  },
+  {
+    icon: MapPin,
+    name: 'Local Info',
+    description: 'Get recommendations for dining and attractions',
+    color: 'bg-orange-50 hover:bg-orange-100 border-orange-200'
+  },
+  {
+    icon: Wrench,
+    name: 'Maintenance',
+    description: 'Report issues with room facilities',
+    color: 'bg-red-50 hover:bg-red-100 border-red-200'
+  },
+  {
+    icon: Sparkles,
+    name: 'Amenities',
+    description: 'Request additional amenities or services',
+    color: 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200'
+  },
+  {
+    icon: Coffee,
+    name: 'Refreshments',
+    description: 'Order coffee, tea, or light snacks',
+    color: 'bg-amber-50 hover:bg-amber-100 border-amber-200'
+  },
+  {
+    icon: Wifi,
+    name: 'Tech Support',
+    description: 'Get help with WiFi, TV, or room technology',
+    color: 'bg-cyan-50 hover:bg-cyan-100 border-cyan-200'
+  },
+  {
+    icon: Phone,
+    name: 'Concierge',
+    description: 'General assistance and special requests',
+    color: 'bg-pink-50 hover:bg-pink-100 border-pink-200'
+  }
+];
+
+export const QuickServices: React.FC<QuickServicesProps> = ({ onServiceRequest }) => {
+  return (
+    <div className="container mx-auto px-6 py-16">
+      <div className="text-center mb-12">
+        <h2 className="text-3xl font-bold text-slate-800 mb-4">Quick Services</h2>
+        <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+          Click on any service below to get instant assistance, or use our AI chatbot for personalized help.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        {services.map((service, index) => (
+          <button
+            key={index}
+            onClick={() => onServiceRequest(service)}
+            className={`p-6 rounded-2xl border-2 transition-all duration-200 text-left group hover:shadow-lg transform hover:-translate-y-1 ${service.color}`}
+          >
+            <div className="flex items-start gap-4">
+              <div className="bg-white p-3 rounded-xl shadow-sm group-hover:shadow-md transition-shadow">
+                <service.icon className="w-6 h-6 text-slate-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-slate-800 mb-2 group-hover:text-slate-900">
+                  {service.name}
+                </h3>
+                <p className="text-sm text-slate-600 group-hover:text-slate-700">
+                  {service.description}
+                </p>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Bottom Message Input */}
+      <div className="mt-16 max-w-2xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-4">
+            <input
+              type="text"
+              placeholder="Type your message..."
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              readOnly
+            />
+            <button className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
+            <span>Made in Bolt</span>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span>AI Assistant Ready</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
