@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { LoginForm } from './components/LoginForm';
 import { ChatInterface } from './components/ChatInterface';
-import { QuickServices } from './components/QuickServices';
 import { AdminDashboard } from './components/AdminDashboard';
 import { GuestStatus } from './components/GuestStatus';
 
@@ -32,8 +31,6 @@ export interface ServiceRequest {
   priority: 'normal' | 'urgent' | 'emergency';
 }
 
-const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:8000';
-
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userType, setUserType] = useState<'guest' | 'admin'>('guest');
@@ -41,10 +38,16 @@ function App() {
   const [guestInfo, setGuestInfo] = useState<Guest>({ name: '', roomNumber: '' });
   const [adminInfo, setAdminInfo] = useState<AdminUser>({ username: '', fullName: '', role: '' });
   
-  // Start with no pre-generated messages; AI will reply on demand
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // Track requests but avoid unused variable warnings
-  const [, setRequests] = useState<ServiceRequest[]>([]);
+  // Helper function to create the initial welcome message
+  const createWelcomeMessage = (): ChatMessage => ({
+    id: 'welcome-message-' + Date.now(),
+    type: 'bot',
+    content: '🏨 Welcome to the Hotel Service Assistant! I\'m here to help you with any requests or questions you may have during your stay. Whether you need housekeeping, room service, maintenance, or information about local attractions, just let me know how I can assist you!',
+    timestamp: new Date()
+  });
+  
+  // Initialize with a welcome message from the chatbot
+  const [messages, setMessages] = useState<ChatMessage[]>([createWelcomeMessage()]);
 
   const addMessage = (content: string, type: 'user' | 'bot') => {
     const newMessage: ChatMessage = {
@@ -54,18 +57,6 @@ function App() {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, newMessage]);
-  };
-
-  const addRequest = (type: string, description: string, priority: 'normal' | 'urgent' | 'emergency' = 'normal') => {
-    const newRequest: ServiceRequest = {
-      id: Date.now().toString(),
-      type,
-      description,
-      status: 'pending',
-      timestamp: new Date(),
-      priority
-    };
-    setRequests(prev => [...prev, newRequest]);
   };
 
   const handleLogin = (token: string, userData: any, type: 'guest' | 'admin') => {
@@ -91,40 +82,8 @@ function App() {
     setUserType('guest');
     setGuestInfo({ name: '', roomNumber: '' });
     setAdminInfo({ username: '', fullName: '', role: '' });
-    setMessages([]);
-  };
-
-  const handleServiceRequest = async (service: { name: string; description: string }) => {
-    const message = `I need ${service.name.toLowerCase()}: ${service.description}`;
-    addMessage(message, 'user');
-    addRequest(service.name, service.description);
-
-    try {
-      const response = await fetch(`${API_BASE}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionToken}`,
-        },
-        body: JSON.stringify({
-          text: message,
-        }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          setIsAuthenticated(false);
-          return;
-        }
-        throw new Error('Failed to get AI response');
-      }
-
-      const data = await response.json();
-      addMessage(data.reply, 'bot');
-    } catch (error) {
-      console.error('Error getting AI response:', error);
-      addMessage("I apologize, but I'm having trouble processing your request. Please try again.", 'bot');
-    }
+    // Reset to initial welcome message
+    setMessages([createWelcomeMessage()]);
   };
 
   if (!isAuthenticated) {
@@ -148,9 +107,7 @@ function App() {
       guestInfo={guestInfo}
       sessionToken={sessionToken}
       messages={messages}
-      onServiceRequest={handleServiceRequest}
       onSendMessage={addMessage}
-      onCreateRequest={addRequest}
       onLogout={handleLogout}
     />
   );
@@ -161,9 +118,7 @@ interface GuestInterfaceProps {
   guestInfo: Guest;
   sessionToken: string;
   messages: ChatMessage[];
-  onServiceRequest: (service: { name: string; description: string }) => void;
   onSendMessage: (content: string, type: 'user' | 'bot') => void;
-  onCreateRequest: (type: string, description: string, priority?: 'normal' | 'urgent' | 'emergency') => void;
   onLogout: () => void;
 }
 
@@ -171,9 +126,7 @@ const GuestInterface: React.FC<GuestInterfaceProps> = ({
   guestInfo,
   sessionToken,
   messages,
-  onServiceRequest,
   onSendMessage,
-  onCreateRequest,
   onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<'services' | 'status'>('services');
@@ -229,27 +182,18 @@ const GuestInterface: React.FC<GuestInterfaceProps> = ({
       {/* Tab Content */}
       <main className="p-6">
         {activeTab === 'services' ? (
-          <div className="flex gap-6">
-            {/* Left side - Services */}
-            <div className="w-1/2">
-              <QuickServices onServiceRequest={onServiceRequest} />
-            </div>
-
-            {/* Right side - Chat Interface */}
-            <div className="w-1/2">
-              <div className="bg-white rounded-lg shadow-sm h-full">
-                <div className="p-6 border-b border-gray-200">
-                  <h2 className="text-xl font-semibold text-gray-900">AI Assistant</h2>
-                  <p className="text-gray-600">How can I help you today?</p>
-                </div>
-                <div className="h-full p-6">
-                  <ChatInterface
-                    messages={messages}
-                    onSendMessage={onSendMessage}
-                    onCreateRequest={onCreateRequest}
-                    sessionToken={sessionToken}
-                  />
-                </div>
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-lg shadow-sm h-full">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">AI Assistant</h2>
+                <p className="text-gray-600">How can I help you today? Use the quick request buttons below or type your own message.</p>
+              </div>
+              <div className="h-full p-6">
+                <ChatInterface
+                  messages={messages}
+                  onSendMessage={onSendMessage}
+                  sessionToken={sessionToken}
+                />
               </div>
             </div>
           </div>

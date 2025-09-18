@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader } from 'lucide-react';
 import type { ChatMessage } from '../App';
+import { QuickChatBubbles } from './QuickChatBubbles';
+import { ContextualSuggestionService } from '../services/contextualSuggestions';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (content: string, type: 'user' | 'bot') => void;
-  onCreateRequest: (type: string, description: string, priority?: 'normal' | 'urgent' | 'emergency') => void;
   sessionToken: string;
 }
 
@@ -14,7 +15,6 @@ const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:8000';
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   messages,
   onSendMessage,
-  onCreateRequest,
   sessionToken
 }) => {
   const [inputValue, setInputValue] = useState('');
@@ -71,13 +71,30 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       const botResponse = await generateBotResponse(userMessage);
       onSendMessage(botResponse, 'bot');
 
-      // Create service requests based on the AI's response
-      const messageLower = botResponse.toLowerCase();
-      if (messageLower.includes('housekeeping') || messageLower.includes('cleaning')) {
-        onCreateRequest('Housekeeping', 'Room service requested', 'normal');
-      } else if (messageLower.includes('maintenance') || messageLower.includes('repair')) {
-        onCreateRequest('Maintenance', 'Maintenance requested', 'urgent');
-      }
+      // Service requests are now handled automatically by the backend AI service
+      // No need to create requests here as the backend processes AI responses
+    } catch (error) {
+      console.error('Error in chat:', error);
+      onSendMessage('I apologize, but I encountered an error. Please try again.', 'bot');
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleBubbleClick = async (message: string) => {
+    setInputValue(message);
+    onSendMessage(message, 'user');
+
+    // Show typing indicator
+    setIsTyping(true);
+
+    try {
+      // Generate and send bot response
+      const botResponse = await generateBotResponse(message);
+      onSendMessage(botResponse, 'bot');
+
+      // Service requests are now handled automatically by the backend AI service
+      // No need to create requests here as the backend processes AI responses
     } catch (error) {
       console.error('Error in chat:', error);
       onSendMessage('I apologize, but I encountered an error. Please try again.', 'bot');
@@ -90,41 +107,60 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     <div className="flex flex-col h-96">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto space-y-4 p-4 bg-gray-50 rounded-lg">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex gap-3 ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-          >
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-              message.type === 'user' 
-                ? 'bg-blue-600' 
-                : 'bg-gradient-to-r from-indigo-600 to-purple-600'
-            }`}>
-              {message.type === 'user' ? (
-                <User className="w-4 h-4 text-white" />
-              ) : (
-                <Bot className="w-4 h-4 text-white" />
+        {messages.map((message, index) => {
+          const isLastBotMessage = message.type === 'bot' && 
+            (index === messages.length - 1 || messages[index + 1]?.type === 'user');
+          const shouldShowSuggestions = isLastBotMessage && 
+            ContextualSuggestionService.shouldShowSuggestions(messages);
+
+          return (
+            <div key={message.id}>
+              <div
+                className={`flex gap-3 ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+              >
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  message.type === 'user' 
+                    ? 'bg-blue-600' 
+                    : 'bg-gradient-to-r from-indigo-600 to-purple-600'
+                }`}>
+                  {message.type === 'user' ? (
+                    <User className="w-4 h-4 text-white" />
+                  ) : (
+                    <Bot className="w-4 h-4 text-white" />
+                  )}
+                </div>
+                <div
+                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+                    message.type === 'user'
+                      ? 'bg-blue-600 text-white rounded-br-md'
+                      : 'bg-white text-gray-800 rounded-bl-md shadow-sm border border-gray-200'
+                  }`}
+                >
+                  <p className="text-sm">{message.content}</p>
+                  <p className={`text-xs mt-1 ${
+                    message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
+                  }`}>
+                    {message.timestamp.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Show contextual suggestions after bot messages */}
+              {shouldShowSuggestions && (
+                <div className="mt-3 ml-11">
+                  <QuickChatBubbles 
+                    messages={messages} 
+                    show={true} 
+                    onBubbleClick={handleBubbleClick} 
+                  />
+                </div>
               )}
             </div>
-            <div
-              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
-                message.type === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-md'
-                  : 'bg-white text-gray-800 rounded-bl-md shadow-sm border border-gray-200'
-              }`}
-            >
-              <p className="text-sm">{message.content}</p>
-              <p className={`text-xs mt-1 ${
-                message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
-              }`}>
-                {message.timestamp.toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                })}
-              </p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Typing Indicator */}
         {isTyping && (

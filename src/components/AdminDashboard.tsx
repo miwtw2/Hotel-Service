@@ -8,11 +8,13 @@ import {
   UserCheck,
   Settings,
   LogOut,
-  RefreshCw
+  RefreshCw,
+  History
 } from 'lucide-react';
 import { RequestsManagement } from './RequestsManagement';
 import { StaffManagement } from './StaffManagement';
 import { AssignmentsManagement } from './AssignmentsManagement';
+import { CustomerRequestHistory } from './CustomerRequestHistory';
 
 interface AdminDashboardProps {
   sessionToken: string;
@@ -67,7 +69,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   userData, 
   onLogout 
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'staff' | 'assignments'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'staff' | 'assignments' | 'customer-history'>('overview');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -177,6 +179,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const updateRequestPriority = async (requestId: string, priority: string, notes?: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/requests/${requestId}/priority`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          priority,
+          notes,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update priority');
+      
+      // Refresh data
+      fetchRequests();
+      fetchDashboardStats();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const refreshData = async () => {
     setIsLoading(true);
     try {
@@ -209,6 +235,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       case 'assigned': return 'text-purple-600 bg-purple-50 border-purple-200';
       case 'in_progress': return 'text-orange-600 bg-orange-50 border-orange-200';
       case 'completed': return 'text-green-600 bg-green-50 border-green-200';
+      case 'cancelled': return 'text-red-600 bg-red-50 border-red-200';
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
   };
@@ -269,6 +296,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               { id: 'requests', label: 'Service Requests', icon: ClipboardList },
               { id: 'staff', label: 'Staff Management', icon: Users },
               { id: 'assignments', label: 'Assignments', icon: UserCheck },
+              { id: 'customer-history', label: 'Customer History', icon: History },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -428,9 +456,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             staff={staff}
             onAssign={assignRequest}
             onUpdateStatus={updateRequestStatus}
+            onUpdatePriority={updateRequestPriority}
             onRefresh={() => fetchRequests()}
             getPriorityColor={getPriorityColor}
             getStatusColor={getStatusColor}
+            sessionToken={sessionToken}
           />
         )}
 
@@ -438,6 +468,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <StaffManagement 
             staff={staff}
             onRefresh={() => fetchStaff()}
+            sessionToken={sessionToken}
           />
         )}
 
@@ -445,6 +476,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <AssignmentsManagement 
             sessionToken={sessionToken}
             staff={staff}
+          />
+        )}
+
+        {activeTab === 'customer-history' && (
+          <CustomerRequestHistory 
+            sessionToken={sessionToken}
           />
         )}
       </main>

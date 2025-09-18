@@ -24,6 +24,6 @@ async def chat_endpoint(request: ChatRequest, authorization: str = Header(None))
     if not guest_info or not guest_info.get("valid"):
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     
-    # Use the verified guest info for the AI response
-    reply = get_ai_response(request.text, guest_info["room_number"])
+    # Use the verified guest info for the AI response with session token
+    reply = get_ai_response(request.text, guest_info["room_number"], session_token)
     return ChatResponse(reply=reply)

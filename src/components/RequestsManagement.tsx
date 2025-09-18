@@ -5,8 +5,12 @@ import {
   AlertTriangle, 
   Edit,
   Eye,
-  UserPlus
+  UserPlus,
+  History,
+  Trash2
 } from 'lucide-react';
+
+const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:8000';
 
 interface ServiceRequest {
   id: string;
@@ -38,9 +42,11 @@ interface RequestsManagementProps {
   staff: StaffMember[];
   onAssign: (requestId: string, staffId: string, notes?: string) => void;
   onUpdateStatus: (requestId: string, status: string, notes?: string) => void;
+  onUpdatePriority: (requestId: string, priority: string, notes?: string) => void;
   onRefresh: () => void;
   getPriorityColor: (priority: string) => string;
   getStatusColor: (status: string) => string;
+  sessionToken: string;
 }
 
 interface AssignmentModalData {
@@ -53,9 +59,11 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   staff,
   onAssign,
   onUpdateStatus,
+  onUpdatePriority,
   onRefresh,
   getPriorityColor,
   getStatusColor,
+  sessionToken,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -68,6 +76,15 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const [statusUpdateData, setStatusUpdateData] = useState<{ requestId: string; currentStatus: string } | null>(null);
   const [newStatus, setNewStatus] = useState('');
   const [statusNotes, setStatusNotes] = useState('');
+  const [showPriorityModal, setShowPriorityModal] = useState(false);
+  const [priorityUpdateData, setPriorityUpdateData] = useState<{ requestId: string; currentPriority: string } | null>(null);
+  const [newPriority, setNewPriority] = useState('');
+  const [priorityNotes, setPriorityNotes] = useState('');
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyRequestId, setHistoryRequestId] = useState<string | null>(null);
+  const [requestHistory, setRequestHistory] = useState<any[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteRequestId, setDeleteRequestId] = useState<string | null>(null);
 
   // Filter requests based on search and filters
   const filteredRequests = requests.filter((request) => {
@@ -110,6 +127,79 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
     await onUpdateStatus(statusUpdateData.requestId, newStatus, statusNotes);
     setShowStatusModal(false);
     setStatusUpdateData(null);
+  };
+
+  const handlePriorityClick = (requestId: string, currentPriority: string) => {
+    setPriorityUpdateData({ requestId, currentPriority });
+    setNewPriority(currentPriority);
+    setPriorityNotes('');
+    setShowPriorityModal(true);
+  };
+
+  const handlePrioritySubmit = async () => {
+    if (!priorityUpdateData) return;
+
+    await onUpdatePriority(priorityUpdateData.requestId, newPriority, priorityNotes);
+    setShowPriorityModal(false);
+    setPriorityUpdateData(null);
+  };
+
+  const handleHistoryClick = async (requestId: string) => {
+    setHistoryRequestId(requestId);
+    setShowHistoryModal(true);
+    
+    try {
+      const response = await fetch(`${API_BASE}/admin/requests/${requestId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch history');
+      
+      const data = await response.json();
+      setRequestHistory(data.history || []);
+    } catch (err: any) {
+      console.error('Error fetching history:', err.message);
+      setRequestHistory([]);
+    }
+  };
+
+  const handleDeleteClick = (requestId: string, status: string) => {
+    if (status !== 'cancelled') {
+      alert('Only cancelled requests can be deleted.');
+      return;
+    }
+    setDeleteRequestId(requestId);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteRequestId) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/admin/requests/${deleteRequestId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        alert('Request deleted successfully');
+        onRefresh();
+      } else {
+        const errorData = await response.json();
+        alert(`Error deleting request: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting request:', error);
+      alert('Error deleting request. Please try again.');
+    }
+
+    setShowDeleteModal(false);
+    setDeleteRequestId(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -164,6 +254,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               <option value="assigned">Assigned</option>
               <option value="in_progress">In Progress</option>
               <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
 
@@ -231,9 +322,12 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getPriorityColor(request.priority)}`}>
+                    <button
+                      onClick={() => handlePriorityClick(request.id, request.priority)}
+                      className={`px-2 py-1 text-xs font-medium rounded-full border hover:opacity-80 ${getPriorityColor(request.priority)}`}
+                    >
                       {request.priority}
-                    </span>
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
@@ -264,15 +358,33 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                     <button
                       onClick={() => handleAssignClick(request.id, request.assigned_staff_id)}
                       className="text-yellow-600 hover:text-yellow-900 mr-3"
+                      title="Assign Staff"
                     >
                       <UserPlus className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleStatusClick(request.id, request.status)}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                      title="Update Status"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
+                    <button
+                      onClick={() => handleHistoryClick(request.id)}
+                      className="text-gray-600 hover:text-gray-900 mr-3"
+                      title="View History"
+                    >
+                      <History className="w-4 h-4" />
+                    </button>
+                    {request.status === 'cancelled' && (
+                      <button
+                        onClick={() => handleDeleteClick(request.id, request.status)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Delete Request"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -364,6 +476,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                   <option value="assigned">Assigned</option>
                   <option value="in_progress">In Progress</option>
                   <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
               </div>
 
@@ -393,6 +506,166 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                 className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
                 Update Status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Priority Update Modal */}
+      {showPriorityModal && priorityUpdateData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Update Request Priority
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Priority
+                </label>
+                <select
+                  value={newPriority}
+                  onChange={(e) => setNewPriority(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="emergency">Emergency</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Priority Notes (Optional)
+                </label>
+                <textarea
+                  value={priorityNotes}
+                  onChange={(e) => setPriorityNotes(e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                  placeholder="Add priority update notes..."
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowPriorityModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePrioritySubmit}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+              >
+                Update Priority
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistoryModal && historyRequestId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                Request History
+              </h3>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto max-h-[60vh]">
+              {requestHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No history available</h3>
+                  <p className="text-gray-600">No actions have been recorded for this request yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {requestHistory.map((entry, index) => (
+                    <div key={entry.id || index} className="border-l-4 border-gray-200 pl-4 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              entry.action === 'created' ? 'bg-blue-100 text-blue-800' :
+                              entry.action === 'assigned' ? 'bg-yellow-100 text-yellow-800' :
+                              entry.action === 'status_changed' ? (
+                                entry.details?.includes('cancelled') ? 'bg-red-100 text-red-800' : 'bg-purple-100 text-purple-800'
+                              ) :
+                              entry.action === 'priority_changed' ? 'bg-orange-100 text-orange-800' :
+                              entry.action === 'completed' ? 'bg-green-100 text-green-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {entry.action.replace('_', ' ')}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              by {entry.user_type}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-900 mt-1">{entry.details}</p>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {formatDate(entry.timestamp)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end mt-6 pt-4 border-t">
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deleteRequestId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Delete Cancelled Request
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to permanently delete this cancelled request? 
+              This action cannot be undone. Chat history will be preserved.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete Request
               </button>
             </div>
           </div>

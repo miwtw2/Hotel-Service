@@ -9,7 +9,17 @@ from app.services.db_services import (
     assign_request_to_staff,
     update_request_status,
     get_staff_assignments,
-    create_admin_session
+    create_admin_session,
+    add_staff_member,
+    update_staff_availability,
+    update_request_priority,
+    get_request_history,
+    get_all_request_history,
+    delete_staff_member,
+    update_staff_member,
+    get_customer_request_history,
+    delete_cancelled_request,
+    get_persistent_customer_history
 )
 
 router = APIRouter()
@@ -32,6 +42,52 @@ class AssignRequestBody(BaseModel):
 class UpdateStatusBody(BaseModel):
     status: str
     notes: str = None
+
+class UpdatePriorityBody(BaseModel):
+    priority: str
+
+class AddStaffBody(BaseModel):
+    staff_id: str
+    full_name: str
+    department: str
+    role: str
+    phone: str = None
+    email: str = None
+    shift_start: str = None
+    shift_end: str = None
+
+class UpdateStaffBody(BaseModel):
+    full_name: str = None
+    department: str = None
+    role: str = None
+    phone: str = None
+    email: str = None
+    shift_start: str = None
+    shift_end: str = None
+    is_available: bool = None
+
+class UpdatePriorityBody(BaseModel):
+    priority: str
+
+class AddStaffBody(BaseModel):
+    staff_id: str
+    full_name: str
+    department: str
+    role: str
+    email: str = None
+    phone: str = None
+    is_available: bool = True
+
+class UpdateStaffAvailabilityBody(BaseModel):
+    is_available: bool
+
+class UpdateStaffBody(BaseModel):
+    staff_id: str = None
+    full_name: str = None
+    department: str = None
+    role: str = None
+    email: str = None
+    phone: str = None
 
 class ServiceRequestResponse(BaseModel):
     id: str
@@ -120,7 +176,7 @@ async def assign_request(
 ):
     """Assign a service request to a staff member"""
     try:
-        admin_user_id = session_info.get("admin_user_id", "demo_admin")
+        admin_user_id = session_info.get("admin_user_id", "admin")
         
         success = assign_request_to_staff(
             request_id=request_id,
@@ -191,3 +247,143 @@ async def get_dashboard_stats(session_info: dict = Depends(verify_admin_session)
         return {"stats": stats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch dashboard stats: {str(e)}")
+
+# Staff Management Endpoints
+
+@router.post("/admin/staff")
+async def add_staff(
+    staff_data: AddStaffBody,
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Add a new staff member"""
+    try:
+        success = add_staff_member(staff_data.dict())
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to add staff member")
+        
+        return {"message": "Staff member added successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add staff member: {str(e)}")
+
+@router.put("/admin/staff/{staff_id}")
+async def update_staff(
+    staff_id: str,
+    staff_data: UpdateStaffBody,
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Update a staff member's information"""
+    try:
+        # Filter out None values
+        update_data = {k: v for k, v in staff_data.dict().items() if v is not None}
+        
+        success = update_staff_member(staff_id, update_data)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update staff member")
+        
+        return {"message": "Staff member updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update staff member: {str(e)}")
+
+@router.put("/admin/staff/{staff_id}/availability")
+async def toggle_staff_availability(
+    staff_id: str,
+    availability: dict,
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Toggle staff member availability"""
+    try:
+        is_available = availability.get("is_available", True)
+        success = update_staff_availability(staff_id, is_available)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update staff availability")
+        
+        return {"message": "Staff availability updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update staff availability: {str(e)}")
+
+@router.delete("/admin/staff/{staff_id}")
+async def remove_staff(
+    staff_id: str,
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Delete a staff member"""
+    try:
+        success = delete_staff_member(staff_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete staff member")
+        
+        return {"message": "Staff member deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete staff member: {str(e)}")
+
+@router.delete("/admin/requests/{request_id}")
+async def delete_cancelled_request_endpoint(
+    request_id: str,
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Delete a cancelled service request permanently"""
+    try:
+        success = delete_cancelled_request(request_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to delete request. Request may not exist or may not be cancelled.")
+        
+        return {"message": "Cancelled request deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete cancelled request: {str(e)}")
+
+# Request Priority Management
+
+@router.put("/admin/requests/{request_id}/priority")
+async def update_priority(
+    request_id: str,
+    priority_update: UpdatePriorityBody,
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Update the priority of a service request"""
+    try:
+        success = update_request_priority(request_id, priority_update.priority)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update priority")
+        
+        return {"message": "Priority updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update priority: {str(e)}")
+
+# Request History Endpoints
+
+@router.get("/admin/requests/{request_id}/history")
+async def get_request_history_endpoint(
+    request_id: str,
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Get the history of actions for a specific request"""
+    try:
+        history = get_request_history(request_id)
+        return {"history": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch request history: {str(e)}")
+
+@router.get("/admin/history")
+async def get_all_history(
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Get the history of all requests"""
+    try:
+        history = get_all_request_history()
+        return {"history": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch request history: {str(e)}")
+
+# Customer Request History Endpoint
+@router.get("/admin/customer-history")
+async def get_customer_history(
+    session_info: dict = Depends(verify_admin_session)
+):
+    """Get persistent customer request history with guest details"""
+    try:
+        customer_history = get_persistent_customer_history()
+        return {"customer_history": customer_history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch customer request history: {str(e)}")

@@ -12,6 +12,8 @@ import {
   Building
 } from 'lucide-react';
 
+const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:8000';
+
 interface StaffMember {
   id: string;
   staff_id: string;
@@ -26,16 +28,41 @@ interface StaffMember {
 interface StaffManagementProps {
   staff: StaffMember[];
   onRefresh: () => void;
+  sessionToken: string;
+}
+
+interface AddStaffForm {
+  staff_id: string;
+  full_name: string;
+  department: string;
+  role: string;
+  email: string;
+  phone: string;
+  shift_start: string;
+  shift_end: string;
 }
 
 export const StaffManagement: React.FC<StaffManagementProps> = ({
   staff,
   onRefresh,
+  sessionToken,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [addStaffForm, setAddStaffForm] = useState<AddStaffForm>({
+    staff_id: '',
+    full_name: '',
+    department: '',
+    role: '',
+    email: '',
+    phone: '',
+    shift_start: '09:00:00',
+    shift_end: '17:00:00',
+  });
 
   // Get unique departments for filter
   const departments = Array.from(new Set(staff.map(s => s.department)));
@@ -57,9 +84,67 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
   });
 
   const handleToggleAvailability = async (staffId: string, currentAvailability: boolean) => {
-    // TODO: Implement API call to toggle staff availability
-    console.log(`Toggle availability for ${staffId}: ${!currentAvailability}`);
-    onRefresh();
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/admin/staff/${staffId}/availability`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          is_available: !currentAvailability,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update staff availability');
+      
+      onRefresh();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddStaff = async () => {
+    if (!addStaffForm.staff_id || !addStaffForm.full_name || !addStaffForm.department || !addStaffForm.role) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/admin/staff`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(addStaffForm),
+      });
+
+      if (!response.ok) throw new Error('Failed to add staff member');
+      
+      setShowAddModal(false);
+      setAddStaffForm({
+        staff_id: '',
+        full_name: '',
+        department: '',
+        role: '',
+        email: '',
+        phone: '',
+        shift_start: '09:00:00',
+        shift_end: '17:00:00',
+      });
+      onRefresh();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getAvailabilityBadge = (isAvailable: boolean) => {
@@ -244,6 +329,13 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
               Add New Staff Member
             </h3>
             
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+                {error}
+              </div>
+            )}
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -251,8 +343,11 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                 </label>
                 <input
                   type="text"
+                  value={addStaffForm.full_name}
+                  onChange={(e) => setAddStaffForm(prev => ({ ...prev, full_name: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                   placeholder="Enter full name"
+                  disabled={isLoading}
                 />
               </div>
 
@@ -262,8 +357,11 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                 </label>
                 <input
                   type="text"
+                  value={addStaffForm.staff_id}
+                  onChange={(e) => setAddStaffForm(prev => ({ ...prev, staff_id: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                   placeholder="Enter staff ID"
+                  disabled={isLoading}
                 />
               </div>
 
@@ -271,7 +369,12 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Department
                 </label>
-                <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                <select 
+                  value={addStaffForm.department}
+                  onChange={(e) => setAddStaffForm(prev => ({ ...prev, department: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                  disabled={isLoading}
+                >
                   <option value="">Select department</option>
                   {departments.map((dept) => (
                     <option key={dept} value={dept}>{dept}</option>
@@ -285,27 +388,46 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                 </label>
                 <input
                   type="text"
+                  value={addStaffForm.role}
+                  onChange={(e) => setAddStaffForm(prev => ({ ...prev, role: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                   placeholder="Enter role"
+                  disabled={isLoading}
                 />
               </div>
             </div>
 
             <div className="flex justify-end space-x-3 mt-6">
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setAddStaffForm({ 
+                    staff_id: '',
+                    full_name: '',
+                    department: '',
+                    role: '',
+                    email: '',
+                    phone: '',
+                    shift_start: '09:00:00',
+                    shift_end: '17:00:00'
+                  });
+                  setError(null);
+                }}
                 className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                disabled={isLoading}
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  // TODO: Implement add staff API call
-                  setShowAddModal(false);
-                }}
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                onClick={handleAddStaff}
+                disabled={isLoading || !addStaffForm.full_name || !addStaffForm.staff_id || !addStaffForm.department || !addStaffForm.role}
+                className={`px-4 py-2 text-white rounded-lg ${
+                  isLoading || !addStaffForm.full_name || !addStaffForm.staff_id || !addStaffForm.department || !addStaffForm.role
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-500 hover:bg-green-600'
+                }`}
               >
-                Add Staff
+                {isLoading ? 'Adding...' : 'Add Staff'}
               </button>
             </div>
           </div>
