@@ -18,9 +18,31 @@ class LoginResponse(BaseModel):
 class AuthRequest(BaseModel):
     session_token: str
 
-@router.post("/auth/login", response_model=LoginResponse)
+# app/routes/auth.py
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from app.services.db_services import create_guest_session, verify_session_token
+import secrets
+
+router = APIRouter()
+
+class LoginRequest(BaseModel):
+    room_number: str
+    guest_name: str
+
+class LoginResponse(BaseModel):
+    session_token: str
+    user_type: str
+    guest_name: str
+    room_number: str
+
+class AuthRequest(BaseModel):
+    session_token: str
+
+@router.post("/auth/login")
 async def login(request: LoginRequest):
-    """Simple login with room number and guest name"""
+    """Handle guest login only"""
+    
     if not request.room_number or not request.guest_name:
         raise HTTPException(status_code=400, detail="Room number and guest name are required")
     
@@ -35,6 +57,7 @@ async def login(request: LoginRequest):
     
     return LoginResponse(
         session_token=session_token,
+        user_type="guest",
         guest_name=request.guest_name,
         room_number=request.room_number
     )

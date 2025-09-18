@@ -2,10 +2,18 @@ import { useState } from 'react';
 import { LoginForm } from './components/LoginForm';
 import { ChatInterface } from './components/ChatInterface';
 import { QuickServices } from './components/QuickServices';
+import { AdminDashboard } from './components/AdminDashboard';
+import { GuestStatus } from './components/GuestStatus';
 
 export interface Guest {
   name: string;
   roomNumber: string;
+}
+
+export interface AdminUser {
+  username: string;
+  fullName: string;
+  role: string;
 }
 
 export interface ChatMessage {
@@ -28,8 +36,10 @@ const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:8000';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userType, setUserType] = useState<'guest' | 'admin'>('guest');
   const [sessionToken, setSessionToken] = useState('');
   const [guestInfo, setGuestInfo] = useState<Guest>({ name: '', roomNumber: '' });
+  const [adminInfo, setAdminInfo] = useState<AdminUser>({ username: '', fullName: '', role: '' });
   
   // Start with no pre-generated messages; AI will reply on demand
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -58,10 +68,30 @@ function App() {
     setRequests(prev => [...prev, newRequest]);
   };
 
-  const handleLogin = (token: string, name: string, roomNumber: string) => {
+  const handleLogin = (token: string, userData: any, type: 'guest' | 'admin') => {
     setSessionToken(token);
-    setGuestInfo({ name, roomNumber });
+    setUserType(type);
+    
+    if (type === 'guest') {
+      setGuestInfo({ name: userData.name, roomNumber: userData.roomNumber });
+    } else {
+      setAdminInfo({ 
+        username: userData.username, 
+        fullName: userData.fullName, 
+        role: userData.role 
+      });
+    }
+    
     setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setSessionToken('');
+    setUserType('guest');
+    setGuestInfo({ name: '', roomNumber: '' });
+    setAdminInfo({ username: '', fullName: '', role: '' });
+    setMessages([]);
   };
 
   const handleServiceRequest = async (service: { name: string; description: string }) => {
@@ -101,38 +131,137 @@ function App() {
     return <LoginForm onLogin={handleLogin} />;
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Left side - Services */}
-      <div className="w-1/2 p-6">
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Welcome, {guestInfo.name}
-          </h1>
-          <p className="text-gray-600">Room {guestInfo.roomNumber}</p>
-        </div>
-        <QuickServices onServiceRequest={handleServiceRequest} />
-      </div>
+  // Render Admin Dashboard for admin users
+  if (userType === 'admin') {
+    return (
+      <AdminDashboard 
+        sessionToken={sessionToken}
+        userData={adminInfo}
+        onLogout={handleLogout}
+      />
+    );
+  }
 
-      {/* Right side - Chat Interface */}
-      <div className="w-1/2 p-6">
-        <div className="bg-white rounded-lg shadow-sm h-full">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">AI Assistant</h2>
-            <p className="text-gray-600">How can I help you today?</p>
-          </div>
-          <div className="h-full p-6">
-            <ChatInterface
-              messages={messages}
-              onSendMessage={addMessage}
-              onCreateRequest={addRequest}
-              sessionToken={sessionToken}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+  // Render Guest Interface for guest users
+  return (
+    <GuestInterface 
+      guestInfo={guestInfo}
+      sessionToken={sessionToken}
+      messages={messages}
+      onServiceRequest={handleServiceRequest}
+      onSendMessage={addMessage}
+      onCreateRequest={addRequest}
+      onLogout={handleLogout}
+    />
   );
 }
+
+// Guest Interface Component
+interface GuestInterfaceProps {
+  guestInfo: Guest;
+  sessionToken: string;
+  messages: ChatMessage[];
+  onServiceRequest: (service: { name: string; description: string }) => void;
+  onSendMessage: (content: string, type: 'user' | 'bot') => void;
+  onCreateRequest: (type: string, description: string, priority?: 'normal' | 'urgent' | 'emergency') => void;
+  onLogout: () => void;
+}
+
+const GuestInterface: React.FC<GuestInterfaceProps> = ({
+  guestInfo,
+  sessionToken,
+  messages,
+  onServiceRequest,
+  onSendMessage,
+  onCreateRequest,
+  onLogout,
+}) => {
+  const [activeTab, setActiveTab] = useState<'services' | 'status'>('services');
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Welcome, {guestInfo.name}
+            </h1>
+            <p className="text-gray-600">Room {guestInfo.roomNumber}</p>
+          </div>
+          <button
+            onClick={onLogout}
+            className="text-gray-600 hover:text-gray-900 text-sm font-medium"
+          >
+            Logout
+          </button>
+        </div>
+      </header>
+
+      {/* Navigation Tabs */}
+      <nav className="bg-white border-b border-gray-200">
+        <div className="px-6">
+          <div className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('services')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'services'
+                  ? 'border-yellow-500 text-yellow-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Services & Chat
+            </button>
+            <button
+              onClick={() => setActiveTab('status')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'status'
+                  ? 'border-yellow-500 text-yellow-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Request Status
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Tab Content */}
+      <main className="p-6">
+        {activeTab === 'services' ? (
+          <div className="flex gap-6">
+            {/* Left side - Services */}
+            <div className="w-1/2">
+              <QuickServices onServiceRequest={onServiceRequest} />
+            </div>
+
+            {/* Right side - Chat Interface */}
+            <div className="w-1/2">
+              <div className="bg-white rounded-lg shadow-sm h-full">
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">AI Assistant</h2>
+                  <p className="text-gray-600">How can I help you today?</p>
+                </div>
+                <div className="h-full p-6">
+                  <ChatInterface
+                    messages={messages}
+                    onSendMessage={onSendMessage}
+                    onCreateRequest={onCreateRequest}
+                    sessionToken={sessionToken}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <GuestStatus 
+            sessionToken={sessionToken}
+            guestInfo={guestInfo}
+          />
+        )}
+      </main>
+    </div>
+  );
+};
 
 export default App;

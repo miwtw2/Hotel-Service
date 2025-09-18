@@ -1,9 +1,9 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import chat, auth
+from app.routes import chat, auth, admin, guest
 
-app = FastAPI(title="Hotel Chatbot API", version="1.0")
+app = FastAPI(title="Hotel Service API", version="1.0.0")
 
 # CORS settings (allow frontend access)
 # In dev, allow all to avoid CORS mishaps; tighten in prod
@@ -20,9 +20,11 @@ app.add_middleware(
 # Include routers
 app.include_router(chat.router)
 app.include_router(auth.router)
+app.include_router(admin.router)
+app.include_router(guest.router)
 
 # Health check endpoint
 @app.get("/")
 @app.get("/health")
 async def root():
-    return {"status": "ok", "message": "Hotel Chatbot API is running"}
+    return {"status": "ok", "message": "Hotel Service API is running"}

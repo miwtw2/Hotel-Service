@@ -1,15 +1,16 @@
 import os
-from openai import OpenAI
+import google.generativeai as genai
 from dotenv import load_dotenv
 from app.services.db_services import log_message
 
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
     # Allow startup but reply with a clear error message when called
-    client = None
+    model = None
 else:
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Hotel info for quick replies
 hotel_info = {
@@ -61,22 +62,18 @@ def get_ai_response(user_text: str, room_number: str = "Unknown") -> str:
         log_message(room_number, reply, "ai")
         return reply
 
-    # AI fallback using GPT-3.5 (or any configured model)
-    if client is None:
+    # AI fallback using Gemini
+    if model is None:
         ai_reply = (
-            "AI is not configured (missing OPENAI_API_KEY). "
+            "AI is not configured (missing GEMINI_API_KEY). "
             "Please set the backend .env and restart the server."
         )
     else:
         try:
-            completion = client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_text}
-                ]
-            )
-            ai_reply = (completion.choices[0].message.content or "").strip()
+            # Combine system prompt with user message for Gemini
+            full_prompt = f"{system_prompt}\n\nUser: {user_text}\nAssistant:"
+            response = model.generate_content(full_prompt)
+            ai_reply = (response.text or "").strip()
             if not ai_reply:
                 ai_reply = "I'm sorry, I couldn't generate a response just now. Please try again."
         except Exception as e:
